@@ -133,7 +133,7 @@ export default function EditProfile() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Edit Profile' }} />
+      <Stack.Screen options={{ headerShown: true, title: 'Edit Profile' }} />
       <KeyboardAvoidingView behavior={Platform.select({ ios:'padding', android: undefined })} style={{ flex:1 }}>
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           {loading ? (
