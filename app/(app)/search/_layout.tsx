@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import { theme } from '../../../lib/theme';
 
-export default function ProfileStack() {
+export default function SearchStack() {
   return (
     <Stack
       screenOptions={{
@@ -9,13 +9,14 @@ export default function ProfileStack() {
         headerTintColor: theme.colors.text,
         headerTitleStyle: { color: theme.colors.text },
         contentStyle: { backgroundColor: theme.colors.background },
-        headerBackButtonDisplayMode: 'minimal', // tanpa teks back
+        headerBackButtonDisplayMode: 'minimal',
       }}
     >
+      {/* Halaman list search: tanpa header */}
       <Stack.Screen name="index" options={{ headerShown: false }} />
-      {/* default untuk [username] biar bisa kita override di file screen */}
+
+      {/* Halaman profil user: header kustom (judul bukan path) */}
       <Stack.Screen name="[username]" options={{ headerShown: true, title: '' }} />
-      <Stack.Screen name="edit" options={{ headerShown: true, title: 'Edit Profile' }} />
     </Stack>
   );
 }

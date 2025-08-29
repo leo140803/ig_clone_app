@@ -1,4 +1,3 @@
-// lib/api.ts
 const BASE = `${process.env.EXPO_PUBLIC_API_URL}/api/v1`;
 
 type Options = {
@@ -8,17 +7,44 @@ type Options = {
   headers?: Record<string,string>;
 };
 
+function isFormDataLike(v: any) {
+  // RN/Expo FormData check
+  return typeof FormData !== 'undefined' && v instanceof FormData;
+}
+
 export async function api<T>(path: string, opts: Options = {}): Promise<T> {
   const { method = 'GET', token, body, headers = {} } = opts;
 
+  const isForm = isFormDataLike(body);
+  const isString = typeof body === 'string';
+  const isObject = body != null && typeof body === 'object' && !isForm;
+
+  const finalHeaders: Record<string,string> = {
+    Accept: 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    // Set Content-Type hanya untuk JSON (bukan FormData)
+    ...(!isForm ? { 'Content-Type': 'application/json' } : {}),
+    ...headers,
+  };
+
+  // Hapus Content-Type kalau user override ke multipart
+  if (isForm && finalHeaders['Content-Type']) delete finalHeaders['Content-Type'];
+
+  const finalBody =
+    body == null
+      ? undefined
+      : isForm
+      ? body // biarkan fetch set boundary
+      : isString
+      ? body // sudah string JSON
+      : isObject
+      ? JSON.stringify(body) // object → stringify
+      : undefined;
+
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-    body: body ? JSON.stringify(body) : undefined,
+    headers: finalHeaders,
+    body: finalBody,
   });
 
   let data: any = null;
@@ -33,15 +59,15 @@ export async function api<T>(path: string, opts: Options = {}): Promise<T> {
   return data as T;
 }
 
-// ---- Tambahan: multipart untuk upload avatar
+// Multipart tetap OK
 export async function apiMultipart<T>(path: string, form: FormData, opts: { method?: 'POST'|'PATCH'; token?: string|null } = {}) {
   const { method = 'PATCH', token } = opts;
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: {
-      // JANGAN set 'Content-Type', biar boundary otomatis
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       Accept: 'application/json',
+      // ❌ jangan set Content-Type
     },
     body: form,
   });

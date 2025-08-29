@@ -10,6 +10,7 @@ export default function AppLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: theme.colors.text,
         tabBarInactiveTintColor: theme.colors.muted,
         tabBarStyle: {
@@ -29,7 +30,7 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="search/index"
+        name="search"
         options={{
           title: 'Search',
           tabBarIcon: ({ color, size }) => <Ionicons name="search-outline" size={size} color={color} />,
@@ -42,6 +43,15 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="add-circle-outline" size={size + 8} color={color} />,
         }}
       />
+      {/* Hide post detail from tab bar and hide the tab bar on that screen */}
+      <Tabs.Screen
+        name="post/[id]"
+        options={{
+          href: null,
+          // Ensure the bottom tab bar is hidden when viewing post detail
+          tabBarStyle: { display: 'none' },
+        }}
+      />
       <Tabs.Screen
         name="notifications/index"
         options={{
@@ -50,10 +60,10 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile/index"
+        name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => <Ionicons name="heart-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="person-circle-outline" size={size} color={color} />,
         }}
       />
     </Tabs>

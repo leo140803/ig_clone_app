@@ -1,6 +1,6 @@
 // app/(app)/profile/ProfileView.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, View, Pressable, Alert, Modal, Animated, Dimensions } from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, View, Pressable, Alert, Modal, Animated, Dimensions, Image } from 'react-native';
 import { theme } from '../../../lib/theme';
 import Avatar from '../../../components/Avatar';
 import Button from '../../../components/Button';
@@ -9,7 +9,7 @@ import { api } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 import type { User } from '../../../types/api';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import { BlurView } from 'expo-blur';
 
 type Props = {
@@ -81,68 +81,75 @@ export default function ProfileView({ username }: Props) {
 
   return (
     <>
-      <ScrollView style={{ flex:1, backgroundColor: theme.colors.background }} contentContainerStyle={{ paddingBottom: 24 }}>
-        {/* Header ala Instagram */}
-        <View style={styles.header}>
-          <Text style={styles.username}>{data.username}</Text>
-          <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.text} />
-        </View>
-
-        {/* Avatar + stats */}
-        <View style={styles.topRow}>
-          <Pressable onLongPress={() => setPreviewOpen(true)}>
-            <Avatar uri={data.avatar_url || undefined} size={86} />
-          </Pressable>
-          <View style={styles.stats}>
-            <Stat label="Posts" value={data.posts_count} />
-            <Stat label="Followers" value={data.followers_count} />
-            <Stat label="Following" value={data.following_count} />
+      <View style={styles.mainContainer}>
+        <ScrollView style={{ flex:1 }} contentContainerStyle={{ paddingBottom: 24 }}>
+          {/* Header ala Instagram */}
+          <View style={styles.header}>
+            <Text style={styles.username}>{data.username}</Text>
+            {isSelf ? (<Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.text} />) : (<></>)}
           </View>
-        </View>
 
-        {/* Name, bio, website */}
-        <View style={{ paddingHorizontal: 16, gap: 4, marginTop: 8 }}>
-          {data.name ? <Text style={styles.name}>{data.name}</Text> : null}
-          {data.bio ? <Text style={styles.bio}>{data.bio}</Text> : null}
-          {data.website ? (
-            <Pressable onPress={onOpenWebsite}>
-              <Text style={styles.link}>{data.website}</Text>
+          {/* Avatar + stats */}
+          <View style={styles.topRow}>
+            <Pressable onLongPress={() => setPreviewOpen(true)}>
+              <Avatar uri={data.avatar_url || undefined} size={86} />
             </Pressable>
-          ) : null}
-        </View>
+            <View style={styles.stats}>
+              <Stat label="Posts" value={data.posts_count} />
+              <Stat label="Followers" value={data.followers_count} />
+              <Stat label="Following" value={data.following_count} />
+            </View>
+          </View>
 
-        {/* Action buttons */}
-        <View style={{ paddingHorizontal: 16, marginTop: 12, flexDirection: 'row', gap: 8 }}>
-          {isSelf ? (
-            <>
-              <ActionButton title="Edit Profile" onPress={() => router.push('/(app)/profile/edit')} />
-              <ActionButton title="Share Profile" onPress={() => { /* TODO */ }} />
-            </>
-          ) : (
-            <>
-              <ActionButton
-                title={data.is_following ? 'Following' : 'Follow'}
+          {/* Name, bio, website */}
+          <View style={{ paddingHorizontal: 16, gap: 4, marginTop: 8 }}>
+            {data.name ? <Text style={styles.name}>{data.name}</Text> : null}
+            {data.bio ? <Text style={styles.bio}>{data.bio}</Text> : null}
+            {data.website ? (
+              <Pressable onPress={onOpenWebsite}>
+                <Text style={styles.link}>{data.website}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* Action buttons */}
+          <View style={{ paddingHorizontal: 16, marginTop: 12, flexDirection: 'row', gap: 8 }}>
+            {isSelf ? (
+              <>
+                <ActionButton title="Edit Profile" onPress={() => router.push('/(app)/profile/edit')} />
+                <ActionButton title="Share Profile" onPress={() => { /* TODO */ }} />
+              </>
+            ) : (
+              <>
+               <ActionButton
+                title={
+                  data.is_following
+                    ? 'Following'
+                    : data.follows_me
+                    ? 'Follow back'
+                    : 'Follow'
+                }
                 onPress={onFollowToggle}
                 loading={followLoading}
                 primary={!data.is_following}
               />
-              <ActionButton title="Message" onPress={() => { /* TODO */ }} />
-            </>
-          )}
-        </View>
 
-        {/* Segmented Tabs (Posts/Tagged) – visual only untuk sekarang */}
-        <View style={styles.segments}>
-          <Segment icon="grid-outline" active />
-          <Segment icon="pricetag-outline" />
-        </View>
+                <ActionButton title="Message" onPress={() => { /* TODO */ }} />
+              </>
+            )}
+          </View>
 
-        {/* Grid posts — tampilan menyusul */}
-        <View style={styles.gridPlaceholder}>
-          <Ionicons name="image-outline" size={48} color={theme.colors.muted} />
-          <Text style={{ color: theme.colors.muted, marginTop: 8 }}>Posts — tampilan menyusul</Text>
-        </View>
-      </ScrollView>
+          {/* Segmented Tabs (Posts/Tagged) – visual only untuk sekarang */}
+          <View style={styles.segments}>
+            <Segment icon="grid-outline" active />
+            <Segment icon="pricetag-outline" />
+          </View>
+
+          {/* Grid posts */}
+          <PostsGrid userId={data.id} token={token!} />
+
+        </ScrollView>
+      </View>
 
       {/* Modal preview avatar */}
       <AvatarPreview
@@ -235,8 +242,138 @@ function Segment({ icon, active }: { icon: any; active?: boolean }) {
   );
 }
 
+type PostLite = {
+  id: number;
+  image_urls: string[];   // dari PostSerializer
+  user: { id: number; username: string }; // minimal yang dipakai
+};
+type Meta = { page: number; total_pages: number; count: number } | undefined;
+
+
+function PostsGrid({ userId, token }: { userId: number; token: string }) {
+  const pathname = usePathname();
+  const [items, setItems] = useState<PostLite[]>([]);
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState<Meta>();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // helper normalisasi respons (bisa {posts, meta} atau array saja)
+  function normalize(raw: any): { posts: PostLite[]; meta?: Meta } {
+    const posts = Array.isArray(raw) ? raw : (raw?.posts ?? raw?.data ?? []);
+    return { posts, meta: raw?.meta };
+  }
+
+  const fetchPage = async (pageNum: number, replace = false) => {
+    try {
+      if (pageNum === 1) setLoading(true);
+      // coba pakai filter user_id (aman kalau diabaikan BE)
+      const url = `/posts?page=${pageNum}&user_id=${userId}`;
+      const res = await api<any>(url, { token });
+      let { posts, meta } = normalize(res);
+      // fallback: kalau BE gak filter di server, filter di FE
+      if (Array.isArray(posts)) {
+        posts = posts.filter(p => p.user?.id === userId);
+      }
+      setMeta(meta);
+      setItems(prev => (replace || pageNum === 1 ? posts : [...prev, ...posts]));
+    } catch (e) {
+      // TODO: toast kalau perlu
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => { fetchPage(1, true); }, [userId]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    setPage(1);
+    fetchPage(1, true);
+  };
+
+  const onEndReached = () => {
+    if (loading) return;
+    if (meta && page >= (meta.total_pages || 1)) return;
+    const next = page + 1;
+    setPage(next);
+    fetchPage(next, false);
+  };
+
+  if (loading && items.length === 0) {
+    return (
+      <View style={styles.gridLoading}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  if (!loading && items.length === 0) {
+    return (
+      <View style={styles.gridEmpty}>
+        <Ionicons name="image-outline" size={48} color={theme.colors.muted} />
+        <Text style={{ color: theme.colors.muted, marginTop: 8 }}>Belum ada postingan</Text>
+      </View>
+    );
+  }
+
+  // simple grid 3 kolom
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingTop: 8 }}
+      refreshControl={
+        // pakai RefreshControl manual (optional): bisa juga FlatList numColumns=3,
+        // tapi di profile kita sudah pakai ScrollView parent—jadi grid manual saja.
+        // Jika mau performa besar, pindah ke FlatList numColumns=3.
+        undefined
+      }
+    >
+      <View style={styles.gridWrap}>
+        {items.map((p) => {
+          const thumb = p.image_urls?.[0];
+          if (!thumb) return null;
+          return (
+            <Pressable
+              key={p.id}
+              style={styles.gridCell}
+              onPress={() =>
+                router.push({
+                  pathname: '/(app)/post/[id]',
+                  params: { id: String(p.id), from: pathname || '/(app)/profile' },
+                })
+              }
+            >
+              <Image source={{ uri: thumb }} style={styles.gridImg} />
+
+              {/* Tanda multi-foto */}
+              {p.image_urls.length > 1 && (
+                <View style={styles.multiIcon}>
+                  <Ionicons name="albums-outline" size={14} color="#fff" />
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* infinite scroll sederhana */}
+      {meta && page < (meta.total_pages || 1) ? (
+        <Pressable onPress={onEndReached} style={{ paddingVertical: 16 }}>
+          <ActivityIndicator />
+        </Pressable>
+      ) : null}
+    </ScrollView>
+  );
+}
+
+
 /* ----------------- Styles ----------------- */
 const styles = StyleSheet.create({
+  mainContainer: { 
+    flex: 1, 
+    backgroundColor: theme.colors.background 
+  },
   center: { flex:1, alignItems:'center', justifyContent:'center', backgroundColor: theme.colors.background },
   header: {
     paddingHorizontal: 16, paddingVertical: 12,
@@ -254,6 +391,37 @@ const styles = StyleSheet.create({
   gridPlaceholder: {
     height: 260, alignItems:'center', justifyContent:'center', borderTopWidth: 1, borderTopColor: theme.colors.border,
   },
+  gridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 2, // rapat ala IG
+    paddingHorizontal: 1,
+  },
+  gridCell: {
+    width: '33.333%',
+    aspectRatio: 1,
+    backgroundColor: theme.colors.surface,
+  },
+  gridImg: {
+    width: '100%',
+    height: '100%',
+  },
+  gridLoading: {
+    height: 200, alignItems: 'center', justifyContent: 'center',
+  },
+  gridEmpty: {
+    height: 200, alignItems: 'center', justifyContent: 'center',
+    borderTopWidth: 1, borderTopColor: theme.colors.border,
+  },
+  multiIcon: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 3,
+    borderRadius: 8,
+  },
+  
 });
 
 const modalStyles = StyleSheet.create({
